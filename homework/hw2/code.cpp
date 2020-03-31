@@ -35,9 +35,7 @@ int main(){
   	//For FTT
 	for(int i=0; i<N; i++){
 		pc.printf("%1.3f\r\n", data[i]);
-		wait(0.1);
 	}
-
 
 	// calculate frequency
 	bool up;
