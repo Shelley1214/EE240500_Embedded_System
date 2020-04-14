@@ -1,5 +1,5 @@
 #include "mbed.h"
-#include "TextLCD.h"
+#include "uLCD_4DGL.h"
 #include "fsl_port.h"
 
 #include "fsl_gpio.h"
@@ -49,7 +49,7 @@ I2C i2c( PTD9,PTD8);
 
 I2C i2c_lcd(D14,D15);
 
-TextLCD_I2C lcd(&i2c_lcd, 0x4E, TextLCD::LCD16x2);
+uLCD_4DGL uLCD(D1,D0,D2);
 
 int m_addr = FXOS8700CQ_SLAVE_ADDR1;
 
@@ -122,8 +122,7 @@ int main() {
 
       t[2] = ((float)acc16) / 4096.0f;
 
-/*
-      pc.printf("X=%1.4f(%x%x) Y=%1.4f(%x%x) Z=%1.4f(%x%x)\r\n",\
+      uLCD.printf("X=%1.4f(%x%x)\r\nY=%1.4f(%x%x)\r\nZ=%1.4f(%x%x)\r\n",\
 
             t[0], res[0], res[1],\
 
@@ -132,11 +131,8 @@ int main() {
             t[2], res[4], res[5]\
 
       );
-*/
-   lcd.printf("X=%1.4f Y=%1.4f Z=%1.4f\n",t[0], t[1] ,t[2]);
-
-      wait(1.0);
-
+      wait(1);
+      uLCD.cls();
    }
 
 }
