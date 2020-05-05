@@ -22,10 +22,9 @@ Serial pc(USBTX, USBRX);
 InterruptIn pause(SW2);
 InterruptIn confirm(SW3);
 
-// float _signal[signalLength];
-// char serialInBuffer[bufferLength];
-// int serialCount = 0;
-int mode = false, test = -1, song_num=0; // 0->mode/ 1->song;
+char serialInBuffer[bufferLength];
+int mode = false, test = -1, song_num=0;
+int song[Size*total_song];
 
 int PredictGesture(float*);
 void mode_selection();
@@ -34,17 +33,18 @@ void playNote(int);
 void loadSignal(void);
 
 int main(){
-	pause.rise(mode_selection);
-	confirm.rise(choose);
+  pause.rise(mode_selection);
+  confirm.rise(choose);
 
-  // ulcd.printf("loading...");
-  // loadSignal();
-	constexpr int kTensorArenaSize = 60 * 1024;
+  ulcd.printf("loading...");
+  loadSignal();
+
+  constexpr int kTensorArenaSize = 60 * 1024;
   uint8_t tensor_arena[kTensorArenaSize];
-	bool should_clear_buffer = false;
+  bool should_clear_buffer = false;
   bool got_data = false;
   int gesture_index;
-	static tflite::MicroErrorReporter micro_error_reporter;
+  static tflite::MicroErrorReporter micro_error_reporter;
   tflite::ErrorReporter* error_reporter = &micro_error_reporter;
   const tflite::Model* model = tflite::GetModel(g_magic_wand_model_data);
 
@@ -56,7 +56,7 @@ int main(){
     return -1;
   }
 
- 	static tflite::MicroOpResolver<6> micro_op_resolver;
+  static tflite::MicroOpResolver<6> micro_op_resolver;
   micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_RESHAPE, tflite::ops::micro::Register_RESHAPE(),1);
   micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_DEPTHWISE_CONV_2D, tflite::ops::micro::Register_DEPTHWISE_CONV_2D());
   micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_MAX_POOL_2D, tflite::ops::micro::Register_MAX_POOL_2D());
@@ -83,36 +83,36 @@ int main(){
     	error_reporter->Report("Set up failed\n");
     	return -1;
   }
-	error_reporter->Report("Set up successful...\n");
+  error_reporter->Report("Set up successful...\n");
 
-	// --------- //
-	while(true){
+  // --------- //
+  while(true){
     // mode
-		if(mode){
+    if(mode){
       playNote(0);
-			if(test == -1){
-				ulcd.cls();
-				ulcd.printf("<<\n>>\nchange song\ntiako game\n");
+      if(test == -1){
+        ulcd.cls();
+        ulcd.printf("<<\n>>\nchange song\ntiako game\n");
         ulcd.locate(15,0);
         ulcd.printf("v");
-				test ++;
+        test ++;
       }
             
       // DNN
-			got_data = ReadAccelerometer(error_reporter, model_input->data.f,input_length, should_clear_buffer);
+      got_data = ReadAccelerometer(error_reporter, model_input->data.f,input_length, should_clear_buffer);
     	if (!got_data) {
-				should_clear_buffer = false;
-				continue;
+        should_clear_buffer = false;
+        continue;
     	}
     	TfLiteStatus invoke_status = interpreter->Invoke();
-  		if (invoke_status != kTfLiteOk) {
-				error_reporter->Report("Invoke failed on index: %d\n", begin_index);
-  			continue;
+      if (invoke_status != kTfLiteOk) {
+        error_reporter->Report("Invoke failed on index: %d\n", begin_index);
+        continue;
 	    }
-	    gesture_index = PredictGesture(interpreter->output(0)->data.f);
-
-	    should_clear_buffer = gesture_index < label_num;
-	    if (gesture_index < label_num && gesture_index == 2) {
+      gesture_index = PredictGesture(interpreter->output(0)->data.f);
+      
+      should_clear_buffer = gesture_index < label_num;
+      if (gesture_index < label_num && gesture_index == 2) {
         ulcd.locate(15,test);
         ulcd.printf(" ");
         test = (test+1)%4;
@@ -122,7 +122,7 @@ int main(){
       ulcd.locate(0,15);
       ulcd.printf("flag=%d, no.%d",test,song_num);
     // change song
-		}else if(test == 4){
+    }else if(test == 4){
       playNote(0);
       ulcd.cls();
       for(int i=0; i<total_song; i++){
@@ -188,11 +188,10 @@ int main(){
           }
         }
         if(tic){
-          if(a[0] == 0) ulcd.printf("\nscoring..."), count++;
+          if(a[0] == 0) ulcd.printf("\nscoring..."), count++, playNote(0);
           else if(number == 0) ulcd.printf("\nfail!   ");
           else if((number+a[0])%2 == 0) ulcd.printf("\ncorrect!"), count ++;
           else ulcd.printf("\nfail!   ");
-
         }
         if(mode) break;
       }
@@ -201,8 +200,8 @@ int main(){
         ulcd.locate(0,15);
         ulcd.printf("score:%d",count*2);
       }
-		}
-	}
+    }
+  }
 }
 
 int PredictGesture(float* output) {
@@ -254,20 +253,21 @@ void playNote(int freq){
   audio.spk.play(waveform, kAudioTxBufferSize);
 }
 
-// void loadSignal(void){
-//   int i = 0;
-//   serialCount = 0;
-//   audio.spk.pause();
-//   while(i < signalLength){
-//     if(pc.readable()){
-//       serialInBuffer[serialCount] = pc.getc();
-//       serialCount++;
-//       if(serialCount == 5){
-//         serialInBuffer[serialCount] = '\0';
-//         _signal[i] = (float) atof(serialInBuffer);
-//         serialCount = 0;
-//         i++;
-//       }
-//     }
-//   }
-// }
+void loadSignal(void){
+  int i = 0;
+  int serialCount = 0;
+  audio.spk.pause();
+  while(i < total_song*Size){
+    if(pc.readable()){
+      serialInBuffer[serialCount] = pc.getc();
+      serialCount++;
+      if(serialCount == 5){
+        serialInBuffer[serialCount] = '\0';
+        float temp = (float) atof(serialInBuffer);
+        song[i] = temp*1000;
+        serialCount = 0;
+        i++;
+      }
+    }
+  }
+}
