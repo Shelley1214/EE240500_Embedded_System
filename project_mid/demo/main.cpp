@@ -22,13 +22,11 @@ int16_t waveform[kAudioTxBufferSize];
 uLCD_4DGL ulcd(D1, D0, D2);
 Serial pc(USBTX, USBRX);
 Thread DNN(osPriorityNormal,120*1024);
-Thread music;
-EventQueue queue(32* EVENTS_EVENT_SIZE);
 InterruptIn pause(SW2);
 InterruptIn confirm(SW3);
 
 char serialInBuffer[bufferLength];
-int mode = false, gesture_index, test = -1, song_num = 0;
+int mode = false, flag = -1, song_num = 0;
 int song[Size*total_song],length[Size*total_song];
 
 void mode_selection();
@@ -39,14 +37,12 @@ void Thread_DNN();
 
 int main(){
   DNN.start(Thread_DNN);
-  music.start(callback(&queue, &EventQueue::dispatch_forever));
-  test = -1, song_num=0;
   pause.rise(mode_selection);
   confirm.rise(choose);
 
   ulcd.printf("loading...");
   loadSignal();
-  // --------- //
+
   while(true){
     // mode
     if(mode){
@@ -55,18 +51,18 @@ int main(){
       ulcd.printf("<<\n>>\nchange song\ntiako game\n");
       ulcd.locate(15,0);
       ulcd.printf("v");
-      test ++;
+      flag ++;
 
       while (mode){
-        ulcd.locate(15,test);
+        ulcd.locate(15,flag);
         ulcd.printf("v");
-        ulcd.locate(15, (test+3)%4);
+        ulcd.locate(15, (flag+3)%4);
         ulcd.printf(" ");
         ulcd.locate(0,15);
-        ulcd.printf("flag=%d, no.%d",test,song_num);
+        ulcd.printf("flag=%d, no.%d",flag,song_num);
       }
     // change song
-    }else if(test == 4){
+    }else if(flag == 4){
       playNote(0);
       ulcd.cls();
       for(int i=0; i<total_song; i++){
@@ -75,8 +71,7 @@ int main(){
       ulcd.locate(12,song_num);
       ulcd.printf("v");
 
-      // DNN
-      while(test == 4){
+      while(flag == 4){
         ulcd.locate(12,song_num);
         ulcd.printf("v");
         ulcd.locate(12,(song_num+total_song-1)%total_song);
@@ -86,42 +81,38 @@ int main(){
     } else{
       bool tic = false;
       int count = 0;
-      if(test != -1){
+      if(flag != -1){
         ulcd.cls();
-        if(test == 0 && song_num != 0){
-          song_num -= 1;
-        }else if(test == 1 && song_num != total_song-1){
-          song_num +=1;
-        }else if(test == 3){
-          tic = true;
-        }
-        test = -1;
+        if(flag == 0 && song_num != 0) song_num -= 1;
+        else if(flag == 1 && song_num != total_song-1) song_num +=1;
+        else if(flag == 3) tic = true;
+        flag = -1;
       }
-      ulcd.locate(12,song_num);
-      ulcd.printf(" ");
-			ulcd.locate(0,0);
-			ulcd.printf("song info--\nSong No.%d",song_num);
+      ulcd.locate(0,0);
+      ulcd.printf("song info--\nSong No.%d",song_num);
+
       for(int i = 0; i < Size; i++){
-        int len = length[song_num*50+i], number = 0;
-        int a[3]={0,0,0};
-        a[0] = length[song_num*50+i];
-        if( i+1 < Size) a[1] = length[song_num*50+i+1];
-        if( i+2 < Size) a[2] = length[song_num*50+i+2];
-        ulcd.locate(5,7);
-        if(tic) ulcd.printf("%d__%d__%d\n",a[0],a[1],a[2]);
-        while(len-- > 0){
-          for(int j = 0; j < kAudioSampleFrequency / kAudioTxBufferSize; ++j){
-            playNote(song[song_num*50+i]);
-            if(!number)number = tilt();
+        if(!mode){
+          int len = length[song_num*50+i], number = 0;
+          int a[3]={0,0,0};
+          a[0] = length[song_num*50+i];
+          if( i+1 < Size) a[1] = length[song_num*50+i+1];
+          if( i+2 < Size) a[2] = length[song_num*50+i+2];
+          ulcd.locate(5,7);
+          if(tic) ulcd.printf("%d__%d__%d\n",a[0],a[1],a[2]);
+          while(len-- > 0){
+            for(int j = 0; j < kAudioSampleFrequency / kAudioTxBufferSize; ++j){
+              playNote(song[song_num*50+i]);
+              if(!number)number = tilt();
+            }
+          }
+          if(tic){
+            if(a[0] == 0) ulcd.printf("\nscoring..."), count++, playNote(0);
+            else if(number == 0) ulcd.printf("\nfail!   ");
+            else if((number+a[0])%2 == 0) ulcd.printf("\ncorrect!"), count ++;
+            else ulcd.printf("\nfail!   ");
           }
         }
-        if(tic){
-          if(a[0] == 0) ulcd.printf("\nscoring..."), count++, playNote(0);
-          else if(number == 0) ulcd.printf("\nfail!   ");
-          else if((number+a[0])%2 == 0) ulcd.printf("\ncorrect!"), count ++;
-          else ulcd.printf("\nfail!   ");
-        }
-        if(mode) break;
       }
       if(tic){
         ulcd.cls();
@@ -133,13 +124,13 @@ int main(){
 }
 
 void mode_selection(){
-	mode = true;
-  test = -1;
+  mode = true;
+  flag = -1;
 }
 
 void choose(){
-  if(test == 2) test = 4;
-  else if(test == 4) test = 5;
+  if(flag == 2) flag = 4;
+  else if(flag == 4) flag = 5;
   mode = false;
 }
 
@@ -182,6 +173,7 @@ void loadSignal(void){
     }
   }
 }
+
 int PredictGesture(float* output) {
   static int continuous_count = 0;
   static int last_predict = -1;
@@ -212,14 +204,12 @@ int PredictGesture(float* output) {
   return this_predict;
 }
 
-
 void Thread_DNN(){
-  while(true){
   constexpr int kTensorArenaSize = 60 * 1024;
   uint8_t tensor_arena[kTensorArenaSize];
   bool should_clear_buffer = false;
   bool got_data = false;
-  gesture_index = label_num;
+  int gesture_index = label_num;
   static tflite::MicroErrorReporter micro_error_reporter;
   tflite::ErrorReporter* error_reporter = &micro_error_reporter;
   const tflite::Model* model = tflite::GetModel(g_magic_wand_model_data);
@@ -239,10 +229,8 @@ void Thread_DNN(){
   micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_CONV_2D, tflite::ops::micro::Register_CONV_2D());
   micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_FULLY_CONNECTED, tflite::ops::micro::Register_FULLY_CONNECTED());
   micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_SOFTMAX, tflite::ops::micro::Register_SOFTMAX());
-  static tflite::MicroInterpreter static_interpreter(
-      model, micro_op_resolver, tensor_arena, kTensorArenaSize, error_reporter);
+  static tflite::MicroInterpreter static_interpreter(model, micro_op_resolver, tensor_arena, kTensorArenaSize, error_reporter);
   tflite::MicroInterpreter* interpreter = &static_interpreter;
-
   interpreter->AllocateTensors();
   TfLiteTensor* model_input = interpreter->input(0);
 
@@ -260,27 +248,23 @@ void Thread_DNN(){
     	return;
   }
   error_reporter->Report("Set up successful...\n");
-   got_data = ReadAccelerometer(error_reporter, model_input->data.f,input_length, should_clear_buffer);
-    	if (!got_data) {
-        should_clear_buffer = false;
-        continue;
-    	}
-    	TfLiteStatus invoke_status = interpreter->Invoke();
-      if (invoke_status != kTfLiteOk) {
-        error_reporter->Report("Invoke failed on index: %d\n", begin_index);
-        continue;
-	    }
-      gesture_index = PredictGesture(interpreter->output(0)->data.f);
-      
-      should_clear_buffer = gesture_index < label_num;
-      if(gesture_index == 2){
-        if(test == 4){
-          song_num = (song_num+1)%total_song;
-        }else if(mode){
-          test = (test+1)%4;
-        }
-      }
+  while(true){
+    got_data = ReadAccelerometer(error_reporter, model_input->data.f,input_length, should_clear_buffer);
+    if (!got_data) {
+      should_clear_buffer = false;
+      continue;
+    }
+  	TfLiteStatus invoke_status = interpreter->Invoke();
+    if (invoke_status != kTfLiteOk) {
+      error_reporter->Report("Invoke failed on index: %d\n", begin_index);
+      continue;
+	  }
+    gesture_index = PredictGesture(interpreter->output(0)->data.f);
+    should_clear_buffer = gesture_index < label_num;
+
+    if(gesture_index == 2){
+      if(flag == 4) song_num = (song_num+1)%total_song;
+      else if(mode) flag = (flag+1)%4;
+    }
   }
 }
-
-
