@@ -49,7 +49,6 @@ int main(){
 
   xbee.getc();
 
-
   // start
   pc.printf("start\r\n");
 
