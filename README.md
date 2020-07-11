@@ -1,5 +1,8 @@
 # Embedded System
 ## Lab 1 - Digital Input and Output
+* equipment : K66F
+  1. Use `DigitalOut LED_Name(LED1);` to control a digital(0/1) output pin 
+  2. Use `DigitalIn  Button_Name(SW3);` to read the value(0/1) of a digital input pin
 ## Lab 2 - Analog Output
 ## Lab 3 - Analog Input
 ## Lab 4 - Liquid Crystal Displays
